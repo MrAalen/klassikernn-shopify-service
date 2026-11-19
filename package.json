@@ -1,0 +1,9 @@
+{
+  "name": "klassikernn-shopify-service",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "start": "bun run server.js",
+    "dev": "bun --watch server.js"
+  }
+}
