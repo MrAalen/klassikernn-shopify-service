@@ -39,7 +39,3 @@ Ferdig Bun-applikasjon (ingen avhengigheter) med Dockerfile, OBS Browser Source 
 - Bun: https://bun.sh/docs
 - Shopify webhook: https://help.shopify.com/en/manual/fulfillment/setup/notifications/webhooks
 - Shopify HMAC: https://shopify.dev/docs/apps/build/webhooks/verify-deliveries
-
-## Lokal kjøring
-
-Krever [Bun](https://bun.sh). Kopier `.env.example` til `.env`, fyll inn verdier og kjør `./start.sh` (eller `bun run start` med variablene satt). For å teste containeren lokalt: `docker build -t klassikernn . && docker run --env-file .env -p 3000:3000 klassikernn`.

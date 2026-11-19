@@ -1,7 +1,6 @@
 FROM oven/bun:1.4-alpine
 ENV NODE_ENV=production PORT=3000 HOST=0.0.0.0 DATA_DIR=/data
 WORKDIR /app
-COPY --chown=bun:bun package.json ./
 COPY --chown=bun:bun server.js ./
 COPY --chown=bun:bun public ./public
 RUN mkdir -p /data && chown bun:bun /data
