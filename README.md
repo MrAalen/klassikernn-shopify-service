@@ -11,25 +11,29 @@ Ferdig Bun-applikasjon (ingen avhengigheter) med Dockerfile, OBS Browser Source 
 5. Deploy. Under Application → **Domains**: legg til `queue.klassikernn.no`, container-port **3000**, HTTPS med Let's Encrypt. DNS for `queue.klassikernn.no` må peke til serveren. Ikke publiser port 3000 direkte.
 6. Kontroller at `https://queue.klassikernn.no/health` returnerer `{"ok":true}`. Åpne `/admin` og logg inn med `ADMIN_PASSWORD`. Test en manuelt opprettet bestilling.
 7. I OBS → Sources → Browser Source: URL `https://queue.klassikernn.no/overlay?key=DIN_OVERLAY_KEY`, bredde 1920, høyde 1080. Plasser køen til høyre. **Ikke vis URL med nøkkel på stream.**
-8. Shopify Admin → Settings → Notifications → Webhooks → Create webhook. Event **Order payment**, Format **JSON**, Delivery URL `https://queue.klassikernn.no/webhooks/orders-paid`, støttet API-versjon. Shopify-skjema kan variere. Sjekk at webhookens signeringsnøkkel er den du konfigurerte. Send en test fra Shopify, og utfør deretter en reell testordre.
+8. Shopify Admin → Settings → Notifications → Webhooks. Opprett **tre** webhooks med format **JSON** og en støttet API-versjon:
+   - **Order payment** (`orders/paid`): `https://queue.klassikernn.no/webhooks/orders-paid`
+   - **Order cancellation** (`orders/cancelled`): `https://queue.klassikernn.no/webhooks/orders-cancelled`
+   - **Refund create** (`refunds/create`): `https://queue.klassikernn.no/webhooks/refunds-create`
+
+   Sjekk at webhookenes signeringsnøkkel er den du konfigurerte. Utfør en betalt testordre med ulike verdier for `Åpnes på stream` og `Levering`, og test deretter kansellering og refusjon med egne testordre.
 
 ## Hvordan køen fungerer
 
-- Når Shopify sender en gyldig `orders/paid`-webhook fra din butikk, legges ordren i køen. Dubletter med samme Shopify-order-ID legges ikke inn flere ganger. Betalingsstatus valideres når oppgitt.
-- OBS viser **kun** offentlig bestillingsreferanse og produktlinjer, aldri e-post, telefon eller leveringsadresse. Endre visningsnavn manuelt i admin til kundens Twitch-/TikTok-navn når det er avklart med kunden.
-- Admin lar deg opprette testordre, flytte opp/ned, markere `Åpnes nå`, `Fullført`, endre visningsnavn. Køen oppdateres automatisk i OBS omtrent hvert tredje sekund.
+- Alle betalte ordre havner i én kø, uansett SKU. Én ordre = én køoppføring med alle produktene. Dubletter med samme Shopify-order-ID legges ikke inn flere ganger.
+- Hver ordrelinje leser Shopify-egenskapene **`Åpnes på stream`** (eller eldre **`Åpnes på live`**) (`Ja`/`Nei`) og **`Levering`**. Produktene merkes `ÅPNES LIVE`, `UÅPNET` eller `VALG UKJENT` (feltet manglet i webhooken – vi antar **ikke** at varen skal åpnes). `Levering` vises kun i admin.
+- **Kansellering** merker ikke-fullførte ordre som kansellert og skjuler dem fra overlay. En kansellering som kommer før «betalt» huskes, så en senere betalt-webhook ikke reaktiverer ordren.
+- **Refusjon** merker ikke-fullførte ordre `SJEKK REFUSJON` i admin (en refusjon kan være delvis). Gå gjennom ordren i Shopify og velg selv om den skal fullføres eller settes tilbake i kø.
+- OBS viser **kun** offentlig bestillingsreferanse, produktlinjer og livevalg, aldri e-post, telefon eller leveringsadresse. Endre visningsnavn manuelt i admin når det er avklart med kunden.
+- Admin lar deg opprette testordre, flytte opp/ned, markere `Åpnes nå`, `Fullført`, endre visningsnavn. «Fullført» gjelder bare køen; den oppfyller ikke ordren i Shopify. OBS oppdateres omtrent hvert tredje sekund.
 - Varig data ligger i `/data/queue-data.json`, på volumet du monterte på `/data` i Dokploy. Ta backup av volumet jevnlig og **ikke** slett volumet ved redeploy.
-
-## Kun Rip & Ship, ikke andre varer
-
-**VIKTIG:** Alle kjøpte produkter inkluderes som standard. Før du åpner for reelle kjøp anbefaler vi å gi hver Rip & Ship-produktvariant en SKU som begynner på `RIP-`, og sette `RIP_SKU_PREFIX=RIP-` i Dokploy. Da ignoreres øvrige produktlinjer. Variant-SKU må være korrekt satt i Shopify. Hvis en ordre inneholder både Rip & Ship og vanlige varer, kommer bare Rip & Ship-linjene i køen. En ordre helt uten match registreres som behandlet, men vises ikke.
 
 ## Drift og begrensninger
 
 - Én applikasjonsinstans / én replika. JSON-fil er ikke egnet til flere skrivende instanser.
 - Admin er passordbeskyttet. Begrens admin-tilgang med VPN/tilgangsregler i tillegg hvis mulig. Ikke bruk en gjenbrukt butikkpassord.
 - Shopify-webhooken verifiseres via HMAC mot **rå forespørselsbody**, butikkdomene og topic. Ordreduplikater avvises. Ikke legg Shopify-hemmeligheter i Git.
-- Refusjoner og kanselleringer håndteres **ikke** automatisk. Kontroller slike ordre manuelt. Missede webhooks etter servernedetid hentes ikke automatisk. For produksjon med større trafikk bør vi legge til Shopify Admin API-avstemming.
+- Kansellering/refusjon endrer aldri en allerede «Fullført»-ordre. Refusjon før «betalt» blir ikke tilbakeført i køstatus. Missede webhooks etter servernedetid hentes ikke automatisk. For produksjon med større trafikk bør vi legge til Shopify Admin API-avstemming.
 - Store mengder bestillinger krever database, backup og overvåkning. Test ordreflyt før du begynner å selge.
 - Browser Source-nøkkelen gir kun visningstilgang og kan roteres i Dokploy. Unngå å vise OBS-kildeegenskaper mens du streamer.
 
